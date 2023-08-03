@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "instrument.h": "c",
+        "thread": "c",
+        "mock.h": "c"
+    }
+}
