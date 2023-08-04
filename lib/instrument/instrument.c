@@ -5,7 +5,8 @@
 #ifdef ENABLE_INSTRUMENTATION
 
 static const uint32_t   kMaxFrameDurationMicros = (uint32_t)(DT * 1000000);
-log_fptr                sLog                    = NULL;
+log_fptr_t                fLog                    = NULL;
+ts_fptr_t                 fTS                     = NULL;
 
 typedef struct {
     struct {
@@ -34,13 +35,23 @@ typedef struct {
 
 static sInstrumentResult sResults[MAX_INSTRUMENTS] = {0};
 
-void instrument_set_logger(log_fptr f) {
-    sLog = f;
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+uint32_t get_delta_us(uint32_t us) {
+    // handle 32bit overflow
+    return MAX(fTS() - us, 
+               UINT32_MAX - us + fTS());
+}
+
+void instrument_setup(log_fptr_t logf, ts_fptr_t tsf) {
+    fLog = logf;
+    fTS = tsf;
 }
 
 void instrument_tick(eInstrument id) {
     if(id < MAX_INSTRUMENTS) {
-        sResults[id].micros.current = get_timestamp_us();
+        sResults[id].micros.current = fTS();
     }
 }
 
@@ -81,7 +92,7 @@ void instrument_tock(eInstrument id) {
 
         // do we need to log ?
         if(get_delta_us(res->log.last_us) > res->log.interval_us) {
-            res->log.last_us = get_timestamp_us();
+            res->log.last_us = fTS();
 
             // compute averages
             uint32_t fs_avg = res->frameskip.sum / res->calls;
@@ -91,14 +102,14 @@ void instrument_tock(eInstrument id) {
             res->calls = 0;
 
             // log
-            sLog("-- Instrument %d (%s) log #%u --\n", id, res->name, res->log.count++);
-            sLog("frameskip min: %u\n", res->frameskip.min);
-            sLog("frameskip max: %u\n", res->frameskip.max);
-            sLog("frameskip avg: %u\n", fs_avg);
-            sLog("duration min: %u us\n", res->micros.min);
-            sLog("duration max: %u us\n", res->micros.max);
-            sLog("duration avg: %u us\n", us_avg);
-            sLog("\n");
+            fLog("-- Instrument %d (%s) log #%u --\n", id, res->name, res->log.count++);
+            fLog("frameskip min: %u\n", res->frameskip.min);
+            fLog("frameskip max: %u\n", res->frameskip.max);
+            fLog("frameskip avg: %u\n", fs_avg);
+            fLog("duration min: %u us\n", res->micros.min);
+            fLog("duration max: %u us\n", res->micros.max);
+            fLog("duration avg: %u us\n", us_avg);
+            fLog("\n");
         }
     }
 }

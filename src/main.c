@@ -3,7 +3,7 @@
 
 
 int main(void) {
-    instrument_set_logger(logger);
+    instrument_setup(logger, get_timestamp_us);
 
     instrument_init(eInstrumentSysTick, "sys_tick", 2000);
     instrument_init(eInstrumentAnalogSample, "analog_sampler", 1000);

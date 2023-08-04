@@ -31,9 +31,3 @@ uint32_t get_timestamp_us() {
     }
     return (uint32_t)((currentTime.tv_sec * 1000000LL) + currentTime.tv_usec - startup_us);
 }
-
-uint32_t get_delta_us(uint32_t us) {
-    // handle 32bit overflow
-    return MAX(get_timestamp_us() - us, 
-               UINT32_MAX - us + get_timestamp_us());
-}

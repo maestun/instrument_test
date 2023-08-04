@@ -1,20 +1,16 @@
 
 #pragma once
 
-#ifdef PIO_NATIVE
 #include <stdint.h>
-#include "mock.h"
-#else
-#include "tim.h"
-#include "hw_config.h"
-#endif
 
-typedef void (*log_fptr)(char*, ...);
+typedef void (*log_fptr_t)(char*, ...);
+typedef uint32_t (*ts_fptr_t)(void);
+
 
 #ifdef ENABLE_INSTRUMENTATION
 
 // feel free to configure this
-#define MAX_INSTRUMENTS                 (8)
+#define MAX_INSTRUMENTS (8)
 
 typedef enum {
     // add your intruments here...
@@ -31,10 +27,11 @@ typedef enum {
 } eInstrument;
 
 /**
- * Set the global logger function pointer. Call this before everyting else
- * @param f A function pointer (ie. 'printf'...) 
+ * Set the global function pointers. Call this before everyting else
+ * @param logf the logger funtion pointer (ie. 'printf'...)
+ * @param tsf the microseconds timestamp funtion pointer (ie. 'get_ts'...) 
  */
-void instrument_set_logger(log_fptr f);
+void instrument_setup(log_fptr_t logf, ts_fptr_t tsf);
 
 
 /**
@@ -61,7 +58,7 @@ void instrument_tock(eInstrument id);
 
 #else
 
-#define instrument_set_logger(f)
+#define instrument_setup(logf, tsf)
 #define instrument_tick(id)
 #define instrument_tock(id)
 #define instrument_init(id, name, millis)
