@@ -2,6 +2,7 @@
     "files.associations": {
         "instrument.h": "c",
         "thread": "c",
-        "mock.h": "c"
+        "mock.h": "c",
+        "stdint.h": "c"
     }
 }

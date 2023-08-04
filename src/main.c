@@ -1,9 +1,10 @@
 #include "mock.h"
 #include "instrument.h"
 
+#define _20_KHZ_ (20000)
 
 int main(void) {
-    instrument_setup(logger, get_timestamp_us);
+    instrument_setup(_20_KHZ_, logger, get_timestamp_us);
 
     instrument_init(eInstrumentSysTick, "sys_tick", 2000);
     instrument_init(eInstrumentAnalogSample, "analog_sampler", 1000);

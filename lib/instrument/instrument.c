@@ -4,9 +4,9 @@
 
 #ifdef ENABLE_INSTRUMENTATION
 
-static const uint32_t   kMaxFrameDurationMicros = (uint32_t)(DT * 1000000);
-log_fptr_t                fLog                    = NULL;
-ts_fptr_t                 fTS                     = NULL;
+uint32_t    sMaxFrameDurationMicros = 0;
+log_fptr_t  fLog                    = NULL;
+ts_fptr_t   fTS                     = NULL;
 
 typedef struct {
     struct {
@@ -44,9 +44,10 @@ uint32_t get_delta_us(uint32_t us) {
                UINT32_MAX - us + fTS());
 }
 
-void instrument_setup(log_fptr_t logf, ts_fptr_t tsf) {
+void instrument_setup(uint32_t expected_frame_freq_hz, log_fptr_t logf, ts_fptr_t tsf) {
     fLog = logf;
     fTS = tsf;
+    sMaxFrameDurationMicros = (uint32_t)((1.0 / expected_frame_freq_hz) * 1000000);
 }
 
 void instrument_tick(eInstrument id) {
@@ -67,7 +68,7 @@ void instrument_tock(eInstrument id) {
         // count number of frames skipped
 #ifdef ENABLE_INSTRUMENTATION_OPTIM
         // multiplication/loop method might be faster than the division method ?
-        while((++fs_current * kMaxFrameDurationMicros) < frame_us)
+        while((++fs_current * sMaxFrameDurationMicros) < frame_us)
             ;
         if(--fs_current > 0) {
             res->frameskip.current = fs_current;
@@ -76,8 +77,8 @@ void instrument_tock(eInstrument id) {
             res->frameskip.min = MIN(res->frameskip.min, fs_current);
         }
 #else
-        if(frame_us > kMaxFrameDurationMicros) {
-            fs_current = frame_us / kMaxFrameDurationMicros;
+        if(frame_us > sMaxFrameDurationMicros) {
+            fs_current = frame_us / sMaxFrameDurationMicros;
             res->frameskip.current = fs_current;
             res->frameskip.sum += fs_current;
             res->frameskip.max = MAX(res->frameskip.max, fs_current);

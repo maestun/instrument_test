@@ -28,10 +28,11 @@ typedef enum {
 
 /**
  * Set the global function pointers. Call this before everyting else
+ * @param expected_frame_freq_hz the expented frame frequency before considering frameskip
  * @param logf the logger funtion pointer (ie. 'printf'...)
  * @param tsf the microseconds timestamp funtion pointer (ie. 'get_ts'...) 
  */
-void instrument_setup(log_fptr_t logf, ts_fptr_t tsf);
+void instrument_setup(uint32_t expected_frame_freq_hz, log_fptr_t logf, ts_fptr_t tsf);
 
 
 /**
@@ -58,7 +59,7 @@ void instrument_tock(eInstrument id);
 
 #else
 
-#define instrument_setup(logf, tsf)
+#define instrument_setup(expected_frame_freq_hz, logf, tsf)
 #define instrument_tick(id)
 #define instrument_tock(id)
 #define instrument_init(id, name, millis)
