@@ -1,27 +1,11 @@
 #include <string.h>
-#include <stdio.h>
 
 #include "instrument.h"
-#include "mock.h"
 
 #ifdef ENABLE_INSTRUMENTATION
 
-// add your intrument names here...
-const char* kInstrumentNames[MAX_INSTRUMENTS] = {
-    "sys_tick",
-    "analog_sample",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
-};
-
 static const uint32_t   kMaxFrameDurationMicros = (uint32_t)(DT * 1000000);
-static uint32_t         sLogEveryMicros         = (uint32_t)(LOG_INSTRUMENTS_EVERY_MILLIS * 1000);
-log_fptr                sLogger                 = NULL;
-
+log_fptr                sLog                    = NULL;
 
 typedef struct {
     struct {
@@ -30,25 +14,31 @@ typedef struct {
         uint32_t max;
         uint32_t sum;
     } frameskip;
+
     struct {
         uint32_t current;
         uint32_t min;
         uint32_t max;
         uint32_t sum;
     } micros;
+
+    struct {
+        uint32_t count;
+        uint32_t interval_us;
+        uint32_t last_us;
+    } log;
+    
+    char name[16];
     uint32_t calls;
-    uint32_t last_log_us;
 } sInstrumentResult;
 
 static sInstrumentResult sResults[MAX_INSTRUMENTS] = {0};
 
-void instrument_setup_logger(log_fptr f, int log_every_ms) {
-    sLogger = f;
-    sLogEveryMicros = log_every_ms * 1000;
+void instrument_set_logger(log_fptr f) {
+    sLog = f;
 }
 
 void instrument_tick(eInstrument id) {
-    // reset instrument if id is valid
     if(id < MAX_INSTRUMENTS) {
         sResults[id].micros.current = get_timestamp_us();
     }
@@ -56,66 +46,70 @@ void instrument_tick(eInstrument id) {
 
 void instrument_tock(eInstrument id) {
     if(id < MAX_INSTRUMENTS) {
-        sInstrumentResult *ptr = &sResults[id];
-        ptr->calls++;
+        sInstrumentResult *res = &sResults[id];
+        res->calls++;
         uint32_t fs_current = 0;
 
         // handle the possibility that the timer2 overflows, since its 32 bit only
-        uint32_t frame_us = get_delta_us(ptr->micros.current);
+        uint32_t frame_us = get_delta_us(res->micros.current);
 
         // count number of frames skipped
-#ifdef USE_DIVISION
-        if(frame_us > kMaxFrameDurationMicros) {
-            fs_current = frame_us / kMaxFrameDurationMicros;
-            ptr->frameskip.current = fs_current;
-            ptr->frameskip.sum += fs_current;
-            ptr->frameskip.max = MAX(ptr->frameskip.max, fs_current);
-            ptr->frameskip.min = MIN(ptr->frameskip.min, fs_current);
-        }
-#else
-        // TODO: multiplication/loop method might be faster than the division method ?
+#ifdef ENABLE_INSTRUMENTATION_OPTIM
+        // multiplication/loop method might be faster than the division method ?
         while((++fs_current * kMaxFrameDurationMicros) < frame_us)
             ;
         if(--fs_current > 0) {
-            ptr->frameskip.current = fs_current;
-            ptr->frameskip.sum += fs_current;
-            ptr->frameskip.max = MAX(ptr->frameskip.max, fs_current);
-            ptr->frameskip.min = MIN(ptr->frameskip.min, fs_current);
+            res->frameskip.current = fs_current;
+            res->frameskip.sum += fs_current;
+            res->frameskip.max = MAX(res->frameskip.max, fs_current);
+            res->frameskip.min = MIN(res->frameskip.min, fs_current);
+        }
+#else
+        if(frame_us > kMaxFrameDurationMicros) {
+            fs_current = frame_us / kMaxFrameDurationMicros;
+            res->frameskip.current = fs_current;
+            res->frameskip.sum += fs_current;
+            res->frameskip.max = MAX(res->frameskip.max, fs_current);
+            res->frameskip.min = MIN(res->frameskip.min, fs_current);
         }
 #endif
         // update micros
-        ptr->micros.current = frame_us;
-        ptr->micros.sum += frame_us;
-        ptr->micros.max = MAX(ptr->micros.max, frame_us);
-        ptr->micros.min = MIN(ptr->micros.min, frame_us);
+        res->micros.current = frame_us;
+        res->micros.sum += frame_us;
+        res->micros.max = MAX(res->micros.max, frame_us);
+        res->micros.min = MIN(res->micros.min, frame_us);
 
         // do we need to log ?
-        if(get_delta_us(ptr->last_log_us) > sLogEveryMicros) {
-            ptr->last_log_us = get_timestamp_us();
+        if(get_delta_us(res->log.last_us) > res->log.interval_us) {
+            res->log.last_us = get_timestamp_us();
 
             // compute averages
-            uint32_t fs_avg = ptr->frameskip.sum / ptr->calls;
-            uint32_t us_avg = ptr->micros.sum / ptr->calls;
-            ptr->frameskip.sum = 0;
-            ptr->micros.sum = 0;
-            ptr->calls = 0;
+            uint32_t fs_avg = res->frameskip.sum / res->calls;
+            uint32_t us_avg = res->micros.sum / res->calls;
+            res->frameskip.sum = 0;
+            res->micros.sum = 0;
+            res->calls = 0;
 
             // log
-            sLogger("-- Instrument %d (%s) --\n", id, kInstrumentNames[id]);
-            sLogger("frameskip min: %u\n", ptr->frameskip.min);
-            sLogger("frameskip max: %u\n", ptr->frameskip.max);
-            sLogger("frameskip avg: %u\n", fs_avg);
-            sLogger("duration min: %u us\n", ptr->micros.min);
-            sLogger("duration max: %u us\n", ptr->micros.max);
-            sLogger("duration avg: %u us\n", us_avg);
-            fflush(stdout);
+            sLog("-- Instrument %d (%s) log #%u --\n", id, res->name, res->log.count++);
+            sLog("frameskip min: %u\n", res->frameskip.min);
+            sLog("frameskip max: %u\n", res->frameskip.max);
+            sLog("frameskip avg: %u\n", fs_avg);
+            sLog("duration min: %u us\n", res->micros.min);
+            sLog("duration max: %u us\n", res->micros.max);
+            sLog("duration avg: %u us\n", us_avg);
+            sLog("\n");
         }
     }
 }
 
-void instrument_reset(eInstrument id) {
+void instrument_init(eInstrument id, char * name, uint32_t log_interval_millis) {
     if(id < MAX_INSTRUMENTS) {
         memset(&sResults[id], 0, sizeof(sInstrumentResult));
+        sResults[id].frameskip.min = UINT32_MAX;
+        sResults[id].micros.min = UINT32_MAX;
+        sResults[id].log.interval_us = log_interval_millis * 1000;
+        strcpy(sResults[id].name, name);
     }
 }
 

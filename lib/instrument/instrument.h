@@ -1,20 +1,20 @@
 
 #pragma once
 
-#ifdef __STM32__
+#ifdef PIO_NATIVE
+#include <stdint.h>
+#include "mock.h"
+#else
 #include "tim.h"
 #include "hw_config.h"
-#else
-#include <stdint.h>
-#define LOOP_FREQUENCY      20000           // 20 kHz loop freq
-#define DT					(1.0 / LOOP_FREQUENCY) // loop period
 #endif
+
+typedef void (*log_fptr)(char*, ...);
 
 #ifdef ENABLE_INSTRUMENTATION
 
 // feel free to configure this
 #define MAX_INSTRUMENTS                 (8)
-#define LOG_INSTRUMENTS_EVERY_MILLIS    (1000)
 
 typedef enum {
     // add your intruments here...
@@ -30,17 +30,40 @@ typedef enum {
     eInstrumentLast = MAX_INSTRUMENTS
 } eInstrument;
 
-typedef void (*log_fptr)(char*, ...);
+/**
+ * Set the global logger function pointer. Call this before everyting else
+ * @param f A function pointer (ie. 'printf'...) 
+ */
+void instrument_set_logger(log_fptr f);
 
-void instrument_setup_logger(log_fptr f, int log_every_ms);
+
+/**
+ * Setup some parameters for a given instrument
+ * @param id The instrument identifier
+ * @param name Max 16 characters, name to be displayed by the logger
+ * @param log_interval_millis Call logger every xxx milliseconds
+ */
+void instrument_init(eInstrument id, char * name, uint32_t log_interval_millis);
+
+
+/**
+ * Starts the instrument counter
+ * @param id The instrument identifier
+ */
 void instrument_tick(eInstrument id);
+
+
+/**
+ * Stops the instrument counter, and compute values, will call logger at setup intervals
+ * @param id The instrument identifier
+ */
 void instrument_tock(eInstrument id);
-void instrument_reset(eInstrument id);
 
 #else
 
+#define instrument_set_logger(f)
 #define instrument_tick(id)
 #define instrument_tock(id)
-#define instrument_reset(id)
+#define instrument_init(id, name, millis)
 
 #endif
