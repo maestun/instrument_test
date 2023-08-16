@@ -7,6 +7,11 @@
 
 #include "mock.h"
 
+static timestamp_t ts = {
+    .seconds = 0,
+    .microseconds = 0
+};
+
 void random_delay_us(int max) {
     int delay = rand() % max;
     usleep(max < 0 ? 100 : delay);
@@ -15,9 +20,18 @@ void random_delay_us(int max) {
 void logger(char* str, ...) {
     va_list args;
     va_start(args, str);
-    vprintf(str, args);
-    fflush(stdout);
+    vfprintf(stdout, str, args);
     va_end(args);
+}
+
+void flusher(void) {
+    fflush(stdout);
+}
+
+timestamp_t * get_timestamp() {
+    // TODO: implementation
+
+    return &ts;
 }
 
 // get timestamp from program start

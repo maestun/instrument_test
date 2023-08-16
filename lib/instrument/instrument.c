@@ -4,9 +4,10 @@
 
 #ifdef ENABLE_INSTRUMENTATION
 
-uint32_t    sMaxFrameDurationMicros = 0;
-log_fptr_t  fLog                    = NULL;
-ts_fptr_t   fTS                     = NULL;
+uint32_t        sMaxFrameDurationMicros = 0;
+log_fptr_t      fLog                    = NULL;
+flush_fptr_t    fFlush                  = NULL;
+ts_fptr_t       fTS                     = NULL;
 
 typedef struct {
     struct {
@@ -29,10 +30,12 @@ typedef struct {
         uint32_t last_us;
     } log;
     
-    char name[16];
+    char name[MAX_INSTRUMENT_NAME];
     uint32_t calls;
+    uint8_t running;
 } sInstrumentResult;
 
+static uint8_t sInstrumentCount = 0;
 static sInstrumentResult sResults[MAX_INSTRUMENTS] = {0};
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -44,20 +47,26 @@ uint32_t get_delta_us(uint32_t us) {
                UINT32_MAX - us + fTS());
 }
 
-void instrument_setup(uint32_t expected_frame_freq_hz, log_fptr_t logf, ts_fptr_t tsf) {
+void instrument_setup(uint32_t expected_frame_freq_hz, 
+                      log_fptr_t logf, 
+                      flush_fptr_t flushf, 
+                      ts_fptr_t tsf) {
     fLog = logf;
+    fFlush = flushf;
     fTS = tsf;
     sMaxFrameDurationMicros = (uint32_t)((1.0 / expected_frame_freq_hz) * 1000000);
 }
 
 void instrument_tick(eInstrument id) {
-    if(id < MAX_INSTRUMENTS) {
+    if(id < MAX_INSTRUMENTS && !sResults[id].running) {
+        sInstrumentCount++;
         sResults[id].micros.current = fTS();
+        sResults[id].running = 1;
     }
 }
 
 void instrument_tock(eInstrument id) {
-    if(id < MAX_INSTRUMENTS) {
+    if(id < MAX_INSTRUMENTS && sResults[id].running) {
         sInstrumentResult *res = &sResults[id];
         res->calls++;
         uint32_t fs_current = 0;
@@ -112,10 +121,17 @@ void instrument_tock(eInstrument id) {
             fLog("duration avg: %u us\n", us_avg);
             fLog("\n");
         }
+
+        if(--sInstrumentCount == 0) {
+            fFlush();
+        }
+        res->running = 0;
     }
 }
 
-void instrument_init(eInstrument id, char * name, uint32_t log_interval_millis) {
+void instrument_init(eInstrument id, 
+                     char * name, 
+                     uint32_t log_interval_millis) {
     if(id < MAX_INSTRUMENTS) {
         memset(&sResults[id], 0, sizeof(sInstrumentResult));
         sResults[id].frameskip.min = UINT32_MAX;
